@@ -32,11 +32,14 @@ function testprop_(ntests::Int, prop::Expr, type_asserts::Vector{Expr})
   symbols_expr = Expr(:tuple)
   symbols_expr.args = [esc(s) for s in symbols_ord]
 
+  types_expr = Expr(:tuple)
+  types_expr.args = [esc(t) for t in types_ord]
+
   Expr(:macrocall, Symbol("@testset"), description,
        Expr(:block,
             Expr(:macrocall, Symbol("@testset"),
                  Expr(:for, Expr(:(=), symbols_expr,
-                                 Expr(:vect, test_values(ntests,types_ord)...)),
+                                 Expr(:macrocall, Symbol("@maketestvalues"), ntests, types_ord)),
                       Expr(:macrocall, Symbol("@test"), esc(prop))
                      )
                 )
@@ -64,7 +67,7 @@ function testcondprop_(ntests::Int, prop::Expr, cond::Expr, type_asserts::Vector
        Expr(:block,
             Expr(:macrocall, Symbol("@testset"),
                  Expr(:for, Expr(:(=), symbols_expr,
-                                 Expr(:vect, test_values(ntests,types_ord)...)),
+                                 Expr(:macrocall, Symbol("@maketestvalues"), ntests, types_ord)),
                       Expr(:macrocall, Symbol("@test"),
                            Expr(:(||), Expr(:call, :(!), esc(cond)), esc(prop))
                           )
@@ -104,12 +107,12 @@ end
 
 
 function extract_types_from_expression(e::Expr)
-  types = Dict{Symbol,DataType}()
+  types = Dict{Symbol,Expr}()
   extract_types_from_expression!(types, e)
   return types
 end
 
-function extract_types_from_expression!(types::Dict{Symbol,DataType}, e::Expr)
+function extract_types_from_expression!(types::Dict{Symbol,Expr}, e::Expr)
   stack = [e]
   while !isempty(stack)
     e = pop!(stack)
@@ -123,7 +126,7 @@ function extract_types_from_expression!(types::Dict{Symbol,DataType}, e::Expr)
   end
 end
 
-function extract_types_from_asserts!(types::Dict{Symbol,DataType}, es::Array{Expr,1})
+function extract_types_from_asserts!(types::Dict{Symbol,Expr}, es::Array{Expr,1})
   for e in es
     if e.head != :(::)
       throw( ArgumentError(string("Type assertions must be of the form ",
@@ -135,14 +138,19 @@ function extract_types_from_asserts!(types::Dict{Symbol,DataType}, es::Array{Exp
   end
 end
 
-function add_type_to_dict!(types::Dict{Symbol,DataType}, e::Expr)
-  add_type_to_dict!(types, e.args[1], eval(e.args[2]))
+function add_type_to_dict!(types::Dict{Symbol,Expr}, e::Expr)
+  if isa(e.args[2], Symbol)
+    t = Expr(:block, e.args[2])
+  else
+    t = e.args[2]
+  end
+  add_type_to_dict!(types, e.args[1], t)
 end
 
-function add_type_to_dict!(types::Dict{Symbol,DataType}, s::Symbol, t::DataType)
+function add_type_to_dict!(types::Dict{Symbol,Expr}, s::Symbol, t::Expr)
   if haskey(types, s)
     if types[s] != t
-      throw( ArgumentError(string("Incompatible types ", types[s], " and ", t,
+      throw( ArgumentError(string("Incompatible type symbols ", types[s], " and ", t,
                                   " specified for symbol ", s)) )
     end
   else
@@ -151,10 +159,12 @@ function add_type_to_dict!(types::Dict{Symbol,DataType}, s::Symbol, t::DataType)
 end
 
 
-function test_values(ntests::Int, types::Tuple)
-  collect(zip([ [ generate_test_value(t, rand((div(n,2) + 1):(div(n,2) + 3)))
-                  for n = 1:ntests ]
-                for t in types ]...))
+macro maketestvalues(ntests::Int, types::Tuple)
+  quote
+    collect(zip([ [ generate_test_value($(esc(:eval))(t), rand((div(n,2) + 1):(div(n,2) + 3)))
+                    for n = 1:$ntests ]
+                  for t in $types ]...))
+  end
 end
 
 
