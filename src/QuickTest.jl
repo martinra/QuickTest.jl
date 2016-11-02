@@ -187,9 +187,10 @@ end
 
 function generate_test_value{T,d}(::Type{Array{T,d}}, size)
   dims = []
+  array_size = size
   for n = 1:d
-    a = rand(1:size)
-    size = min(1,div(size,a))
+    a = rand(1:array_size)
+    array_size = max(1,div(array_size,a))
     append!(dims,a)
   end
   reshape([generate_test_value(T,size) for x in 1:prod(dims)], dims...)
