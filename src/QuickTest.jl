@@ -11,11 +11,34 @@
 module QuickTest
 
 using Base.Test
+using Base.Test: AbstractTestSet, DefaultTestSet
+using LightGraphs
 
-export @testprop
+import Base.Test: record, finish
+
+export @testprop, QuickTestSet
 
 
 const ntests_default = 100::Int
+const maxntries_default_factor = 4::Int
+
+
+abstract Element{P}
+abstract ElementVector{P}
+
+
+type QuickTestSet <: AbstractTestSet
+  testset::DefaultTestSet
+  function QuickTestSet(desc; var_vals=Tuple{String,Symbol}[])
+    for (s,v) in var_vals
+      desc = string(desc, "  $s = $v")
+    end
+    new(DefaultTestSet(desc))
+  end
+end
+
+record(ts::QuickTestSet,r) = record(ts.testset,r)
+finish(ts::QuickTestSet) = finish(ts.testset)
 
 
 function testprop_(ntests::Int, prop::Expr, type_asserts::Vector{Expr})
@@ -27,27 +50,22 @@ function testprop_(ntests::Int, prop::Expr, type_asserts::Vector{Expr})
 
   types = extract_types_from_expression(prop)
   extract_types_from_asserts!(types, type_asserts)
-  symbols_ord, types_ord = collect(zip([[s,t] for (s,t) in types]...))
+  types = topological_sort_types(types)
 
-  symbols_expr = Expr(:tuple)
-  symbols_expr.args = [esc(s) for s in symbols_ord]
-
-  types_expr = Expr(:tuple)
-  types_expr.args = [esc(t) for t in types_ord]
-
-  Expr(:macrocall, Symbol("@testset"), description,
+  Expr(:for, Expr(:(=), :testsize, Expr(:(:), 1, ntests)),
        Expr(:block,
+            init_test(:testsize, types)...,
             Expr(:macrocall, Symbol("@testset"),
-                 Expr(:for, Expr(:(=), symbols_expr,
-                                 Expr(:macrocall, Symbol("@maketestvalues"), ntests, types_ord)),
-                      Expr(:macrocall, Symbol("@test"), esc(prop))
-                     )
+                 esc(:QuickTestSet),
+                 Expr(:(=), esc(:var_vals), esc(var_vals(types))),
+                 string(description, ": case"),
+                 Expr(:block, Expr(:macrocall, Symbol("@test"), esc(prop)))
                 )
            )
       )
 end
 
-function testcondprop_(ntests::Int, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
+function testcondprop_(ntests::Int, maxntries::Int, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
   if isempty(type_asserts) 
     description = string(prop, " | ", cond)
   else
@@ -58,33 +76,83 @@ function testcondprop_(ntests::Int, prop::Expr, cond::Expr, type_asserts::Vector
   types = extract_types_from_expression(prop)
   extract_types_from_expression!(types, cond)
   extract_types_from_asserts!(types, type_asserts)
-  symbols_ord, types_ord = collect(zip([[s,t] for (s,t) in types]...))
+  types = topological_sort_types(types)
 
-  symbols_expr = Expr(:tuple)
-  symbols_expr.args = [esc(s) for s in symbols_ord]
-
-  Expr(:macrocall, Symbol("@testset"), description,
-       Expr(:block,
-            Expr(:macrocall, Symbol("@testset"),
-                 Expr(:for, Expr(:(=), symbols_expr,
-                                 Expr(:macrocall, Symbol("@maketestvalues"), ntests, types_ord)),
-                      Expr(:macrocall, Symbol("@test"),
-                           Expr(:(||), Expr(:call, :(!), esc(cond)), esc(prop))
-                          )
-                     )
+  Expr(:block,
+       Expr(:(=), :testsize, 1),
+       Expr(:for, Expr(:(=), :xtry, Expr(:(:), 1, maxntries)),
+            Expr(:block,
+                 init_test(:testsize, types)...,
+                 Expr(:(||), esc(cond), :(continue)),
+                 Expr(:macrocall, Symbol("@testset"),
+                      esc(:QuickTestSet),
+                      Expr(:(=), esc(:var_vals), esc(var_vals(types))),
+                      string(description, ": case"),
+                      Expr(:block, Expr(:macrocall, Symbol("@test"), esc(prop)))
+                     ),
+                 Expr(:(+=), :testsize, 1),
+                 Expr(:if, Expr(:call, :(>), :testsize, ntests),
+                      Expr(:break)
                 )
+           )
+       ),
+       Expr(:if, Expr(:call, :(<=), :testsize, ntests),
+            Expr(:call, :warn, string("Did not exhaust number of test cases for ", description))
            )
       )
 end
+
+function topological_sort_types(types)
+  g = DiGraph()
+  symbol_labels = Dict{Symbol,Int}()
+  symbol_list = Symbol[]
+  for (s,t) in types
+    add_vertex!(g)
+    symbol_labels[s] = nv(g)
+    push!(symbol_list,s)
+  end
+  for (s,t) in types
+    if t.head == :curly && t.args[1] in [:Element, :ElementVector]
+      add_edge!(g, symbol_labels[t.args[2]], symbol_labels[s])
+    end
+  end
+
+  sorted_types = Tuple{Symbol,Expr}[]
+  for sx in topological_sort_by_dfs(g)
+    s = symbol_list[sx]
+    push!(sorted_types, (s, types[s]))
+  end
+  return sorted_types
+end
+
+function init_test(size_symbol, types)
+  exprs = Expr[]
+  for (s,t) in types
+    if t.head == :curly && t.args[1] == :Element
+      push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_value, esc(t.args[2]), size_symbol)))
+    elseif t.head == :curly && t.args[1] == :ElementVector
+      push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_vector, esc(t.args[2]), size_symbol)))
+    else
+      push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_value, esc(t), size_symbol)))
+    end
+  end
+  return exprs
+end
+
+function var_vals(types)
+  return Expr(:vect, [Expr(:tuple, string(s), esc(s)) for (s,t) in types]...)
+end
+
 
 macro testprop(prop::Expr, cond_and_type_asserts...)
   cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
 
   if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
     ntests = ntests_default
+    maxntries = maxntries_default_factor * ntests
     cond = cond_and_type_asserts[1]
     type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, prop, cond, type_asserts)
+    return testcondprop_(ntests, maxntries, prop, cond, type_asserts)
   else
     ntests = ntests_default
     type_asserts = cond_and_type_asserts
@@ -96,12 +164,25 @@ macro testprop(ntests::Int, prop::Expr, cond_and_type_asserts...)
   cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
 
   if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
+    maxntries = maxntries_default_factor * ntests
     cond = cond_and_type_asserts[1]
     type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, prop, cond, type_asserts)
+    return testcondprop_(ntests, maxntries, prop, cond, type_asserts)
   else
     type_asserts = cond_and_type_asserts
     return testprop_(ntests, prop, type_asserts)
+  end
+end
+
+macro testprop(ntests::Int, maxntries::Int, prop::Expr, cond_and_type_asserts...)
+  cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
+
+  if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
+    cond = cond_and_type_asserts[1]
+    type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
+    return testcondprop_(ntests, maxntries, prop, cond, type_asserts)
+  else
+    error("maximum number of tries given, but no test condition present")
   end
 end
 
@@ -159,15 +240,6 @@ function add_type_to_dict!(types::Dict{Symbol,Expr}, s::Symbol, t::Expr)
 end
 
 
-macro maketestvalues(ntests::Int, types::Tuple)
-  quote
-    collect(zip([ [ generate_test_value($(esc(:eval))(t), rand((div(n,2) + 1):(div(n,2) + 3)))
-                    for n = 1:$ntests ]
-                  for t in $types ]...))
-  end
-end
-
-
 function generate_test_value{T<:Signed}(::Type{T}, size)
   convert(T, rand(-size:size))
 end
@@ -214,5 +286,36 @@ function generate_test_value{A,B,C,D}(::Type{Tuple{A,B,C,D}}, size)
    generate_test_value(C, size), generate_test_value(D, size))
 end
 
+## in more complex situations, types do not encode the full parametricity of a parent
+## in this case we need 
+
+function generate_test_vector{A}(parent::A, size)
+  vsize = rand(1:size)
+  [generate_test_value(parent,size) for x in 1:vsize]
+end
+
+function generate_test_matrix{A}(parent::A, size)
+  rsize = rand(1:size)
+  csize = rand(1:max(1,div(size,rsize)))
+  dims = [rsize, csize]
+  reshape([generate_test_value(T,size) for x in 1:prod(dims)], dims...)
+end
+
+function generate_test_tuple{A}(parentA::A, size)
+  (generate_test_vector(parentA,size),)
+end
+function generate_test_tuple{A,B}(parentA::A, parentB::B, size)
+  (generate_test_vector(parentA,size),generate_test_vector(parentB,size))
+end
+
+function generate_test_tuple{A,B,C}(parentA::A, parentB::B, parentC::C, size)
+  (generate_test_vector(parentA,size),generate_test_vector(parentB,size),
+   generate_test_vector(parentC,size))
+end
+
+function generate_test_tuple{A,B,C,D}(parentA::A, parentB::B, parentC::C, parentD::D, size)
+  (generate_test_vector(parentA,size),generate_test_vector(parentB,size),
+   generate_test_vector(parentC,size),generate_test_vector(parentD,size))
+end
 
 end

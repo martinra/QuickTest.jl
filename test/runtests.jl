@@ -1,7 +1,8 @@
 using Base.Test
 using QuickTest
 
-import QuickTest: generate_test_value, @maketestvalues
+import Base: ==
+import QuickTest: generate_test_value, Element
 
 
 @testset "unconditioned property test" begin
@@ -24,20 +25,12 @@ end
   @testprop -a > 0  a::Int < 0  a::Int
   @testprop -a > 0  a::Int < 0  b::Float64
   @testprop 10 -a > 0  a::Int < 0
+  @testprop 10 100 -a > 0  a::Int < 0
+
+  @testprop isa(a::Int,Float64) a != a
   
   @test_throws ArgumentError eval(macroexpand(:( @testprop -a::Int128 > 0  a::Int < 0 )))
   @test_throws ArgumentError eval(macroexpand(:( @testprop -a > 0  a::Int < 0  a::Int128 )))
-end
-
-@testset "maketestvalues" begin
-  eval_maketestvalues(n,t) = eval( Expr(:macrocall,
-                                      Expr(:(.), :QuickTest, QuoteNode(Symbol("@maketestvalues"))),
-                                      n, t) )
-  @testset for T in [:Int, :UInt, :Float64, :String, :(Vector{Int}), :(Array{Int,2})]
-    @test length( eval_maketestvalues(5, (T,)) ) == 5
-    @test length( eval_maketestvalues(5, (Int,T,)) ) == 5
-  end
-  @testprop 10 length( eval_maketestvalues(n, (Int,)) ) == n::Int  n >= 0
 end
 
 
@@ -48,6 +41,23 @@ function generate_test_value(::Type{TestType}, size)
   TestType(generate_test_value(Int,size))
 end
 
+type ZZmod
+  modulus::Int
+end
+type zz
+  parent::ZZmod
+  value::Int
+end
+
+==(a::ZZmod, b::ZZmod) = a.modulus == b.modulus
+==(a::zz, b::zz) = a.parent == b.parent && a.value == b.value
+
+generate_test_value(::Type{ZZmod}, gsize) = ZZmod(rand(1:gsize))
+generate_test_value(a::ZZmod, gsize) = zz(a, rand(0:(a.modulus-1)))
+
 @testset "custom types in test properties" begin
   @testprop isa(a::TestType,TestType)
+  @testprop a == a  p::ZZmod a::Element{p}
+  @testprop 1 isa(a,zz)  p::ZZmod a::Element{p}
+  @testprop isa(a,Vector{zz})  p::ZZmod a::ElementVector{p}
 end
