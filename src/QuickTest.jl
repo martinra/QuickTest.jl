@@ -7,7 +7,6 @@
 # http://www.cse.chalmers.se/~rjmh/QuickCheck/
 #
 ################################################################################
-
 module QuickTest
 
 using Base.Test
@@ -80,8 +79,12 @@ function testcondprop_(ntests::Int, maxntries::Int, prop::Expr, cond::Expr, type
 
   Expr(:block,
        Expr(:(=), :testsize, 1),
+       Expr(:(=), :curtest, 1),
        Expr(:for, Expr(:(=), :xtry, Expr(:(:), 1, maxntries)),
             Expr(:block,
+                 Expr(:if, Expr(:call, :(>), :xtry, Expr(:call, :(*), :maxntries_default_factor, :testsize)),
+                      Expr(:(+=), :testsize, 1),
+                     ),
                  init_test(:testsize, types)...,
                  Expr(:(||), esc(cond), :(continue)),
                  Expr(:macrocall, Symbol("@testset"),
@@ -91,12 +94,13 @@ function testcondprop_(ntests::Int, maxntries::Int, prop::Expr, cond::Expr, type
                       Expr(:block, Expr(:macrocall, Symbol("@test"), esc(prop)))
                      ),
                  Expr(:(+=), :testsize, 1),
-                 Expr(:if, Expr(:call, :(>), :testsize, ntests),
+                 Expr(:(+=), :curtest, 1),
+                 Expr(:if, Expr(:call, :(>), :curtest, ntests),
                       Expr(:break)
                 )
            )
        ),
-       Expr(:if, Expr(:call, :(<=), :testsize, ntests),
+       Expr(:if, Expr(:call, :(<=), :curtest, ntests),
             Expr(:call, :warn, string("Did not exhaust number of test cases for ", description))
            )
       )
