@@ -24,6 +24,7 @@ const maxntries_default_factor = 4::Int
 
 abstract Element{P}
 abstract ElementVector{P}
+abstract Expression{P}
 
 
 type QuickTestSet <: AbstractTestSet
@@ -118,6 +119,8 @@ function topological_sort_types(types)
   for (s,t) in types
     if t.head == :curly && t.args[1] in [:Element, :ElementVector]
       add_edge!(g, symbol_labels[t.args[2]], symbol_labels[s])
+    elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] == :Expression
+      add_edge!(g, symbol_labels[t.args[1].args[2]], symbol_labels[s])
     end
   end
 
@@ -136,6 +139,8 @@ function init_test(size_symbol, types)
       push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_value, esc(t.args[2]), size_symbol)))
     elseif t.head == :curly && t.args[1] == :ElementVector
       push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_vector, esc(t.args[2]), size_symbol)))
+    elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] == :Expression
+      push!(exprs, Expr(:(=), esc(s), esc(t.args[2])))
     else
       push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_value, esc(t), size_symbol)))
     end

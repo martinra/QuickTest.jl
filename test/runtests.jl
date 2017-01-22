@@ -33,6 +33,9 @@ end
   @test_throws ArgumentError eval(macroexpand(:( @testprop -a > 0  a::Int < 0  a::Int128 )))
 end
 
+@testset "expressions" begin
+  @testprop a+1 == b  a::Int b::Expression{a}(a+1)
+end
 
 type TestType
   a::Int
