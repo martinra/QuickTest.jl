@@ -120,7 +120,9 @@ function topological_sort_types(types)
     if t.head == :curly && t.args[1] in [:Element, :ElementVector]
       add_edge!(g, symbol_labels[t.args[2]], symbol_labels[s])
     elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] == :Expression
-      add_edge!(g, symbol_labels[t.args[1].args[2]], symbol_labels[s])
+      for ts in t.args[1].args[2:end]
+        add_edge!(g, symbol_labels[ts], symbol_labels[s])
+      end
     end
   end
 

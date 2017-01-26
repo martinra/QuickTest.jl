@@ -35,6 +35,7 @@ end
 
 @testset "expressions" begin
   @testprop a+1 == b  a::Int b::Expression{a}(a+1)
+  @testprop a+b == c  a::Int b::Int c::Expression{a,b}(a+b)
 end
 
 type TestType
