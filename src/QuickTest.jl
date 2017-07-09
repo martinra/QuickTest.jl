@@ -22,9 +22,9 @@ const ntests_default = 100::Int
 const maxntries_default_factor = 4::Int
 
 
-abstract Element{P}
-abstract ElementVector{P}
-abstract Expression{P}
+abstract type Element{P} end
+abstract type ElementVector{P} end
+abstract type Expression{P} end
 
 
 type QuickTestSet <: AbstractTestSet
