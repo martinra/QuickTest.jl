@@ -26,6 +26,10 @@ abstract type Element{P} end
 abstract type ElementVector{P} end
 abstract type Expression{P} end
 
+abstract type Elem{P} end
+abstract type ElemV{P} end
+abstract type Exp{P} end
+
 
 type QuickTestSet <: AbstractTestSet
   testset::DefaultTestSet
@@ -117,9 +121,9 @@ function topological_sort_types(types)
     push!(symbol_list,s)
   end
   for (s,t) in types
-    if t.head == :curly && t.args[1] in [:Element, :ElementVector]
+    if t.head == :curly && t.args[1] in [:Element, :Elem, :ElementVector, :ElemV]
       add_edge!(g, symbol_labels[t.args[2]], symbol_labels[s])
-    elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] == :Expression
+    elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] in [:Expression, :Exp]
       for ts in t.args[1].args[2:end]
         add_edge!(g, symbol_labels[ts], symbol_labels[s])
       end
@@ -137,11 +141,11 @@ end
 function init_test(size_symbol, types)
   exprs = Expr[]
   for (s,t) in types
-    if t.head == :curly && t.args[1] == :Element
+    if t.head == :curly && t.args[1] in [:Element, :Elem]
       push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_value, esc(t.args[2]), size_symbol)))
-    elseif t.head == :curly && t.args[1] == :ElementVector
+    elseif t.head == :curly && t.args[1] in [:ElementVector, :ElemV]
       push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_vector, esc(t.args[2]), size_symbol)))
-    elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] == :Expression
+    elseif t.head == :call && t.args[1].head == :curly && t.args[1].args[1] in [:Expression, :Exp]
       push!(exprs, Expr(:(=), esc(s), esc(t.args[2])))
     else
       push!(exprs, Expr(:(=), esc(s), Expr(:call, generate_test_value, esc(t), size_symbol)))

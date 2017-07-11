@@ -2,7 +2,7 @@ using Base.Test
 using QuickTest
 
 import Base: ==
-import QuickTest: generate_test_value, Element
+import QuickTest: generate_test_value
 
 
 @testset "unconditioned property test" begin
@@ -35,7 +35,9 @@ end
 
 @testset "expressions" begin
   @testprop a+1 == b  a::Int b::Expression{a}(a+1)
-  @testprop a+b == c  a::Int b::Int c::Expression{a,b}(a+b)
+  @testprop a+b == c  a::Int b::Int c::Exp{a,b}(a+b)
+  @testprop 10 a+1 == b  a::Int b::Expression{a}(a+1)
+  @testprop 10 a+b == c  a::Int b::Int c::Exp{a,b}(a+b)
 end
 
 type TestType
@@ -60,8 +62,10 @@ generate_test_value(::Type{ZZmod}, gsize) = ZZmod(rand(1:gsize))
 generate_test_value(a::ZZmod, gsize) = zz(a, rand(0:(a.modulus-1)))
 
 @testset "custom types in test properties" begin
-  @testprop isa(a::TestType,TestType) == true
+  @testprop isa(a::TestType,TestType)
+  @testprop 10 (isa(a::TestType,TestType))
   @testprop a == a  p::ZZmod a::Element{p}
-  @testprop isa(a,zz) == true  p::ZZmod a::Element{p}
+  @testprop isa(a,zz) == true  p::ZZmod a::Elem{p}
   @testprop isa(a,Vector{zz}) == true  p::ZZmod a::ElementVector{p}
+  @testprop isa(a,Vector{zz}) == true  p::ZZmod a::ElemV{p}
 end
