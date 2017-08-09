@@ -11,6 +11,5 @@ module QuickTest
 
 include("GenerateTestValue.jl")
 include("TestProp.jl")
-# include("TestAlgebra.jl")
 
 end

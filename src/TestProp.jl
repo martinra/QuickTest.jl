@@ -65,6 +65,22 @@ function testprop_(ntests_::Union{Int,Null}, prop::Expr, type_asserts::Vector{Ex
       )
 end
 
+
+function testcondprop_(ntests::Union{Int,Null}, maxntries::Union{Int,Null}, prop::Expr, cond_and_type_asserts)
+  cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
+
+  if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
+    cond = cond_and_type_asserts[1]
+    type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
+    return testcondprop_(ntests, null, prop, cond, type_asserts)
+  elseif isa(maxntries, Null)
+    type_asserts = cond_and_type_asserts
+    return testprop_(ntests, prop, type_asserts)
+  else
+    error("maximum number of tries given, but no test condition present")
+  end
+end
+
 function testcondprop_(ntests_::Union{Int,Null}, maxntries_::Union{Int,Null}, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
   if isa(ntests_, Null)
     ntests = ntests_default
@@ -168,41 +184,15 @@ end
 
 
 macro testprop(prop::Expr, cond_and_type_asserts...)
-  cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
-
-  if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
-    cond = cond_and_type_asserts[1]
-    type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(null, null, prop, cond, type_asserts)
-  else
-    type_asserts = cond_and_type_asserts
-    return testprop_(null, prop, type_asserts)
-  end
+  return testcondprop_(null, null, prop, cond_and_type_asserts)
 end
 
 macro testprop(ntests::Int, prop::Expr, cond_and_type_asserts...)
-  cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
-
-  if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
-    cond = cond_and_type_asserts[1]
-    type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, null, prop, cond, type_asserts)
-  else
-    type_asserts = cond_and_type_asserts
-    return testprop_(ntests, prop, type_asserts)
-  end
+  return testcondprop_(ntests, null, prop, cond_and_type_asserts)
 end
 
 macro testprop(ntests::Int, maxntries::Int, prop::Expr, cond_and_type_asserts...)
-  cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
-
-  if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
-    cond = cond_and_type_asserts[1]
-    type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, maxntries, prop, cond, type_asserts)
-  else
-    error("maximum number of tries given, but no test condition present")
-  end
+  return testcondprop_(ntests, maxntries, prop, cond_and_type_asserts)
 end
 
 
