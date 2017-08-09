@@ -1,6 +1,7 @@
 using Base.Test
 using Base.Test: AbstractTestSet, DefaultTestSet
 using LightGraphs
+using Nulls
 
 import Base.Test: record, finish
 
@@ -34,7 +35,13 @@ record(ts::QuickTestSet,r) = record(ts.testset,r)
 finish(ts::QuickTestSet) = finish(ts.testset)
 
 
-function testprop_(ntests::Int, prop::Expr, type_asserts::Vector{Expr})
+function testprop_(ntests_::Union{Int,Null}, prop::Expr, type_asserts::Vector{Expr})
+  if isa(ntests_, Null)
+    ntests = ntests_default
+  else
+    ntests = ntests_
+  end
+
   if isempty(type_asserts) 
     description = string(prop) 
   else
@@ -58,7 +65,19 @@ function testprop_(ntests::Int, prop::Expr, type_asserts::Vector{Expr})
       )
 end
 
-function testcondprop_(ntests::Int, maxntries::Int, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
+function testcondprop_(ntests_::Union{Int,Null}, maxntries_::Union{Int,Null}, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
+  if isa(ntests_, Null)
+    ntests = ntests_default
+  else
+    ntests = ntests_
+  end
+
+  if isa(maxntries_, Null)
+    maxntries = maxntries_default_factor * ntests
+  else
+    maxntries = maxntries_
+  end
+
   if isempty(type_asserts) 
     description = string(prop, " | ", cond)
   else
@@ -152,15 +171,12 @@ macro testprop(prop::Expr, cond_and_type_asserts...)
   cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
 
   if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
-    ntests = ntests_default
-    maxntries = maxntries_default_factor * ntests
     cond = cond_and_type_asserts[1]
     type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, maxntries, prop, cond, type_asserts)
+    return testcondprop_(null, null, prop, cond, type_asserts)
   else
-    ntests = ntests_default
     type_asserts = cond_and_type_asserts
-    return testprop_(ntests, prop, type_asserts)
+    return testprop_(null, prop, type_asserts)
   end
 end
 
@@ -168,10 +184,9 @@ macro testprop(ntests::Int, prop::Expr, cond_and_type_asserts...)
   cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
 
   if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
-    maxntries = maxntries_default_factor * ntests
     cond = cond_and_type_asserts[1]
     type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, maxntries, prop, cond, type_asserts)
+    return testcondprop_(ntests, null, prop, cond, type_asserts)
   else
     type_asserts = cond_and_type_asserts
     return testprop_(ntests, prop, type_asserts)
