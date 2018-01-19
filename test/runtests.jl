@@ -64,8 +64,17 @@ generate_test_value(a::ZZmod, gsize) = zz(a, rand(0:(a.modulus-1)))
 @testset "custom types in test properties" begin
   @testprop isa(a::TestType,TestType)
   @testprop 10 (isa(a::TestType,TestType))
+
   @testprop a == a  p::ZZmod a::Element{p}
   @testprop isa(a,zz) == true  p::ZZmod a::Elem{p}
   @testprop isa(a,Vector{zz}) == true  p::ZZmod a::ElementVector{p}
   @testprop isa(a,Vector{zz}) == true  p::ZZmod a::ElemV{p}
+
+  let
+    p = ZZmod(5)
+    @testprop a == a  a::Element{p}
+    @testprop isa(a,zz) == true  a::Elem{p}
+    @testprop isa(a,Vector{zz}) == true  a::ElementVector{p}
+    @testprop isa(a,Vector{zz}) == true  a::ElemV{p}
+  end
 end
