@@ -1,7 +1,6 @@
 using Base.Test
 using Base.Test: AbstractTestSet, DefaultTestSet
 using LightGraphs
-using Nulls
 
 import Base.Test: record, finish
 
@@ -35,8 +34,8 @@ record(ts::QuickTestSet,r) = record(ts.testset,r)
 finish(ts::QuickTestSet) = finish(ts.testset)
 
 
-function testprop_(ntests_::Union{Int,Null}, prop::Expr, type_asserts::Vector{Expr})
-  if isa(ntests_, Null)
+function testprop_(ntests_::Union{Int,Void}, prop::Expr, type_asserts::Vector{Expr})
+  if isa(ntests_, Void)
     ntests = ntests_default
   else
     ntests = ntests_
@@ -66,14 +65,14 @@ function testprop_(ntests_::Union{Int,Null}, prop::Expr, type_asserts::Vector{Ex
 end
 
 
-function testcondprop_(ntests::Union{Int,Null}, maxntries::Union{Int,Null}, prop::Expr, cond_and_type_asserts)
+function testcondprop_(ntests::Union{Int,Void}, maxntries::Union{Int,Void}, prop::Expr, cond_and_type_asserts)
   cond_and_type_asserts = Vector{Expr}(collect(cond_and_type_asserts))
 
   if !isempty(cond_and_type_asserts) && cond_and_type_asserts[1].head != :(::)
     cond = cond_and_type_asserts[1]
     type_asserts = cond_and_type_asserts[2:length(cond_and_type_asserts)]
-    return testcondprop_(ntests, null, prop, cond, type_asserts)
-  elseif isa(maxntries, Null)
+    return testcondprop_(ntests, nothing, prop, cond, type_asserts)
+  elseif isa(maxntries, Void)
     type_asserts = cond_and_type_asserts
     return testprop_(ntests, prop, type_asserts)
   else
@@ -81,14 +80,14 @@ function testcondprop_(ntests::Union{Int,Null}, maxntries::Union{Int,Null}, prop
   end
 end
 
-function testcondprop_(ntests_::Union{Int,Null}, maxntries_::Union{Int,Null}, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
-  if isa(ntests_, Null)
+function testcondprop_(ntests_::Union{Int,Void}, maxntries_::Union{Int,Void}, prop::Expr, cond::Expr, type_asserts::Vector{Expr})
+  if isa(ntests_, Void)
     ntests = ntests_default
   else
     ntests = ntests_
   end
 
-  if isa(maxntries_, Null)
+  if isa(maxntries_, Void)
     maxntries = maxntries_default_factor * ntests
   else
     maxntries = maxntries_
@@ -184,11 +183,11 @@ end
 
 
 macro testprop(prop::Expr, cond_and_type_asserts...)
-  return testcondprop_(null, null, prop, cond_and_type_asserts)
+  return testcondprop_(nothing, nothing, prop, cond_and_type_asserts)
 end
 
 macro testprop(ntests::Int, prop::Expr, cond_and_type_asserts...)
-  return testcondprop_(ntests, null, prop, cond_and_type_asserts)
+  return testcondprop_(ntests, nothing, prop, cond_and_type_asserts)
 end
 
 macro testprop(ntests::Int, maxntries::Int, prop::Expr, cond_and_type_asserts...)
