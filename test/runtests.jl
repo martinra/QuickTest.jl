@@ -11,7 +11,7 @@ import QuickTest: generate_test_value
   @testprop a::Int == a && b::Float64 == b
   @testprop a == a a::Int
   @testprop a::Int == a a::Int
-  @testprop a::Int == a b::Float64
+  @testprop a::Int == a a::Int b::Float64
   @testprop 10 a::Int == a
 
   @test_throws ArgumentError eval(macroexpand(:( @testprop a::Int == a::Int128 )))

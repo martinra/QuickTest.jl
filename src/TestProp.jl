@@ -47,8 +47,13 @@ function testprop_(ntests_::Union{Int,Void}, prop::Expr, type_asserts::Vector{Ex
     description = string(prop, " | ", [string(ta, " ") for ta in type_asserts]...)
   end
 
-  types = extract_types_from_expression(prop)
+  types = Dict{Symbol,Expr}()
   extract_types_from_asserts!(types, type_asserts)
+  if isempty(types)
+    extract_types_from_expression!(types, prop)
+  else
+    check_types_from_property(types, prop)
+  end
   types = topological_sort_types(types)
 
   Expr(:for, Expr(:(=), :testsize, Expr(:(:), 1, ntests)),
@@ -100,9 +105,14 @@ function testcondprop_(ntests_::Union{Int,Void}, maxntries_::Union{Int,Void}, pr
                          [string(ta, " ") for ta in type_asserts]...)
   end
 
-  types = extract_types_from_expression(prop)
+  types = Dict{Symbol,Expr}()
   extract_types_from_expression!(types, cond)
   extract_types_from_asserts!(types, type_asserts)
+  if isempty(types)
+    extract_types_from_expression!(types, prop)
+  else
+    check_types_from_property(types, prop)
+  end
   types = topological_sort_types(types)
 
   Expr(:block,
@@ -199,12 +209,6 @@ macro testprop(ntests::Int, maxntries::Int, prop::Expr, cond_and_type_asserts...
 end
 
 
-function extract_types_from_expression(e::Expr)
-  types = Dict{Symbol,Expr}()
-  extract_types_from_expression!(types, e)
-  return types
-end
-
 function extract_types_from_expression!(types::Dict{Symbol,Expr}, e::Expr)
   stack = [e]
   while !isempty(stack)
@@ -228,6 +232,17 @@ function extract_types_from_asserts!(types::Dict{Symbol,Expr}, es::Array{Expr,1}
     end
 
     add_type_to_dict!(types, e)
+  end
+end
+
+function check_types_from_property(types::Dict{Symbol,Expr}, prop::Expr)
+  prop_types = Dict{Symbol,Expr}()
+  extract_types_from_expression!(prop_types, prop)
+  for (s,t) in prop_types
+    if haskey(types, s) && types[s] != t
+      throw( ArgumentError(string("Test asserts that $s is of type $t, ",
+                                  "but property requires $(types[s])")) )
+    end
   end
 end
 
